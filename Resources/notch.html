@@ -1,0 +1,406 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Claude Notch</title>
+<style>
+  :root {
+    --orange: #D97757; --amber: #F0B35A; --green: #7FD495; --rest: #4E4944;
+    --ink: #F3EEE6; --dim: #948D84;
+  }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: transparent;
+    -webkit-user-select: none; user-select: none; cursor: default;
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #shapeSvg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
+
+  /* ---------- Pet (pixel art) ---------- */
+  .pet * { transform-box: fill-box; }
+  .pet .eyes, .pet .blush, .pet .acc > g { display: none; }
+  .pet .eyes.open { display: inline; transform-origin: center; animation: blink 4.6s infinite; }
+  .pet .all { transform-origin: 50% 100%; }
+
+  .m-working .legA { animation: step .55s step-end infinite; }
+  .m-working .legB { animation: step .55s step-end infinite -.275s; }
+  .m-working .armL { animation: step .3s step-end infinite; }
+  .m-working .armR { animation: step .3s step-end infinite -.15s; }
+  .m-waiting .armR { animation: wave .7s step-end infinite; }
+  .m-done .eyes.open, .m-happy .eyes.open, .m-pet .eyes.open { display: none; }
+  .m-done .eyes.happy, .m-happy .eyes.happy, .m-pet .eyes.happy { display: inline; }
+  .m-done .blush, .m-pet .blush { display: inline; }
+  .m-done .all { animation: hop 1.1s cubic-bezier(.3,0,.3,1) 2; }
+  .m-pet .all  { animation: squish .45s ease-out; }
+  .m-sleep .eyes.open { display: none; }
+  .m-sleep .eyes.closed { display: inline; }
+  .m-sleep .all { animation: breathe 3.4s ease-in-out infinite; }
+  .m-hungry .all { animation: wobble 1.8s ease-in-out infinite; }
+  .m-sad .eyes.open { transform: scaleY(.55); animation: none; }
+  .lv3 .acc .sprout, .lv6 .acc .hat, .lv10 .acc .crown { display: inline; }
+
+  @keyframes blink   { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.12); } }
+  @keyframes step    { 0% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+  @keyframes wave    { 0% { transform: translateY(-2px); } 50% { transform: translateY(-3px); } }
+  @keyframes hop     { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-3px); } 55% { transform: translateY(0); } 75% { transform: translateY(-1.2px); } }
+  @keyframes squish  { 0% { transform: scale(1); } 35% { transform: scale(1.12, .86); } 70% { transform: scale(.95, 1.06); } 100% { transform: scale(1); } }
+  @keyframes breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.93); } }
+  @keyframes wobble  { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
+
+  /* ---------- Pips + inline toast ---------- */
+  .pip-working { animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .pipcount { font: 700 9.5px/1 -apple-system, sans-serif; font-variant-numeric: tabular-nums; }
+  .toast { font: 600 11px/1 -apple-system, sans-serif; }
+
+  /* ---------- Hover list ---------- */
+  #list { position: absolute; overflow: hidden; color: var(--ink); }
+  .row { display: flex; align-items: center; gap: 7px; height: 20px; padding: 0 5px; margin: 0 -5px;
+         border-radius: 6px; cursor: pointer; }
+  .row:hover { background: #1B1816; }
+  .dot { width: 6px; height: 6px; border-radius: 3px; flex: none; }
+  .working .dot { background: var(--orange); animation: pulse 1.8s ease-in-out infinite; }
+  .waiting .dot { background: var(--amber); }
+  .done .dot    { background: var(--green); }
+  .rest .dot    { background: var(--rest); }
+  .p { font: 600 11px/1 -apple-system, sans-serif; flex: none; max-width: 96px;
+       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .d { font: 400 11px/1 -apple-system, sans-serif; color: var(--dim); flex: 1; min-width: 0;
+       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .waiting .d { color: var(--amber); }
+  .row.rest { cursor: default; }
+  .row.rest .p, .row.rest .d { color: #6B645D; font-weight: 400; }
+  .foot { display: flex; align-items: center; gap: 6px; height: 18px; margin-top: 3px;
+          font: 500 10px/1 -apple-system, sans-serif; color: #6F6861; white-space: nowrap; overflow: hidden; }
+  .foot b { color: var(--dim); font-weight: 600; }
+  .foot .bar { width: 22px; height: 3px; border-radius: 2px; background: #2A2623; overflow: hidden; display: inline-block; }
+  .foot .bar i { display: block; height: 100%; }
+  .foot .sp { flex: 1; }
+
+  body.preview { background: linear-gradient(160deg, #e9d8c7, #c9a58a 55%, #8b6a5a); }
+</style>
+</head>
+<body>
+<svg id="shapeSvg" xmlns="http://www.w3.org/2000/svg">
+  <rect id="fakeNotch" fill="#000" style="display:none"/>
+  <path id="shape" fill="#000"/>
+  <g id="petG"></g>
+  <g id="pips"></g>
+  <g id="toastG"><text id="toastText" class="toast" dominant-baseline="central"></text></g>
+</svg>
+<div id="list"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const post = msg => { try { window.webkit.messageHandlers.native.postMessage(msg); } catch (_) {} };
+
+// ---------------------------------------------------------------- geometry
+let W = 485, H = 202, NW = 185, NH = 32;
+const LEFT_WING = 30;                  // room for the little pet
+const MIN_RIGHT = 30;                  // room for the pips
+const LIST_SIDE = 36;                  // hover list: how far past the notch on each side
+
+// ---------------------------------------------------------------- state
+let model = { sessions: [], pet: null, autoExpand: true };
+let hover = false;
+let toast = null, toastUntil = 0, toastTimer = 0;
+let mode = "hidden";                   // hidden | compact | toast | hover
+let listH = 0;
+
+const COLOR = { waiting: "#F0B35A", working: "#D97757", done: "#7FD495" };
+const ORDER = { waiting: 0, working: 1, done: 2, resting: 3 };
+
+const counts = () => {
+  const c = { working: 0, waiting: 0, done: 0, resting: 0 };
+  for (const s of model.sessions) c[s.state]++;
+  return c;
+};
+const overall = c => c.waiting ? "waiting" : c.working ? "working" : c.done ? "done" : "idle";
+
+// ---------------------------------------------------------------- pet
+function petSVG() {
+  const O = "#D97757", D = "#C2643F", E = "#1F1A17", G = "#7FD495", P = "#9B7FE6", Y = "#F4C95D", B = "#F2A0A0";
+  const r = (x, y, w, h, c) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}"/>`;
+  return `<svg class="pet" viewBox="0 0 15 13" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><g class="all">
+    <g class="acc">
+      <g class="sprout">${r(7, 2, 1, 2, G)}${r(6, 1, 1, 1, G)}${r(8, 1, 1, 1, G)}</g>
+      <g class="hat">${r(7, 0, 1, 1, Y)}${r(7, 1, 1, 1, P)}${r(6, 2, 3, 1, P)}${r(5, 3, 5, 1, P)}</g>
+      <g class="crown">${r(5, 3, 5, 1, Y)}${r(5, 2, 1, 1, Y)}${r(7, 2, 1, 1, Y)}${r(9, 2, 1, 1, Y)}${r(7, 3, 1, 1, "#E8566B")}</g>
+    </g>
+    <g class="legA">${r(4, 10, 1, 2, O)}${r(8, 10, 1, 2, O)}</g><g class="legB">${r(6, 10, 1, 2, O)}${r(10, 10, 1, 2, O)}</g>
+    ${r(3, 4, 9, 6, O)}${r(3, 9, 9, 1, D)}
+    <g class="armL">${r(1, 6, 2, 2, O)}</g><g class="armR">${r(12, 6, 2, 2, O)}</g>
+    <g class="eyes open">${r(5, 6, 1, 2, E)}${r(9, 6, 1, 2, E)}</g>
+    <g class="eyes happy">${r(4, 7, 1, 1, E)}${r(5, 6, 1, 1, E)}${r(6, 7, 1, 1, E)}${r(8, 7, 1, 1, E)}${r(9, 6, 1, 1, E)}${r(10, 7, 1, 1, E)}</g>
+    <g class="eyes closed">${r(4, 7, 2, 1, E)}${r(9, 7, 2, 1, E)}</g>
+    <g class="blush">${r(4, 8, 1, 1, B)}${r(10, 8, 1, 1, B)}</g>
+  </g></svg>`;
+}
+$("petG").innerHTML = petSVG();
+const pet = $("petG").firstElementChild;
+let petUntil = 0;
+
+function petMood() {
+  if (performance.now() < petUntil) return "pet";
+  const o = overall(counts());
+  if (o !== "idle") return o;
+  const m = model.pet?.mood || "happy";
+  return m === "ok" ? "happy" : m;
+}
+function applyPetMood() {
+  const lv = model.pet?.level || 1;
+  const cls = `pet m-${petMood()} ${lv >= 10 ? "lv10" : lv >= 6 ? "lv6" : lv >= 3 ? "lv3" : ""}`;
+  if (pet.getAttribute("class") !== cls) pet.setAttribute("class", cls);
+}
+
+// ---------------------------------------------------------------- right wing: pips or inline toast
+let pipsWidth = 0;
+function renderPips() {
+  const c = counts();
+  const order = ["waiting", "working", "done"];
+  const total = c.waiting + c.working + c.done;
+  let html = "";
+  if (total <= 6) {
+    const list = order.flatMap(k => Array(c[k]).fill(k));
+    const gap = 8;
+    pipsWidth = list.length ? (list.length - 1) * gap + 6 : 0;
+    list.forEach((k, i) => {
+      html += `<circle class="pip-${k}" cx="${-pipsWidth / 2 + 3 + i * gap}" cy="0" r="2.6" fill="${COLOR[k]}"/>`;
+    });
+  } else {
+    // Lots of sessions: "●3 ●1" instead of a row of dots.
+    const groups = order.filter(k => c[k]);
+    const gw = 20;
+    pipsWidth = groups.length * gw - 4;
+    groups.forEach((k, i) => {
+      const x = -pipsWidth / 2 + i * gw;
+      html += `<circle class="pip-${k}" cx="${x + 3}" cy="0" r="2.6" fill="${COLOR[k]}"/>` +
+              `<text class="pipcount" x="${x + 8}" y="0" dominant-baseline="central" fill="${COLOR[k]}">${c[k]}</text>`;
+    });
+  }
+  if ($("pips").dataset.k !== html) { $("pips").innerHTML = html; $("pips").dataset.k = html; }
+}
+
+const measure = (() => {
+  const ctx = document.createElement("canvas").getContext("2d");
+  return (text, font) => { ctx.font = font; return ctx.measureText(text).width; };
+})();
+
+let toastWidth = 0;
+function renderToast() {
+  const t = $("toastText");
+  if (mode !== "toast" || !toast) { toastWidth = 0; return; }
+  const icon = toast.state === "waiting" ? "!" : "✓";
+  let name = toast.project;
+  while (name.length > 4 && measure(`${icon} ${name}`, "600 11px -apple-system") > 112) name = name.slice(0, -2);
+  if (name !== toast.project) name = name.replace(/.$/, "…");
+  t.textContent = `${icon} ${name}`;
+  t.setAttribute("fill", COLOR[toast.state] || COLOR.done);
+  toastWidth = measure(t.textContent, "600 11px -apple-system, sans-serif");
+}
+
+// ---------------------------------------------------------------- hover list
+function renderList() {
+  const el = $("list");
+  if (mode !== "hover") { listH = 0; return; }
+  const c = counts();
+  const active = model.sessions.filter(s => s.state !== "resting").sort((a, b) => ORDER[a.state] - ORDER[b.state]);
+  let html = active.slice(0, 6).map(s =>
+    `<div class="row ${s.state}" data-id="${esc(s.id)}"><span class="dot"></span>` +
+    `<span class="p">${esc(s.project)}</span><span class="d">${esc(s.detail)}</span></div>`).join("");
+  if (active.length > 6) html += `<div class="row rest"><span class="dot"></span><span class="d">+${active.length - 6} más</span></div>`;
+  if (c.resting) html += `<div class="row rest"><span class="dot"></span><span class="d">${c.resting} descansando</span></div>`;
+
+  const p = model.pet || {};
+  const moods = { sleep: "durmiendo", hungry: "con hambre", sad: "aburrido", happy: "contento", ok: "tranqui" };
+  const status = overall(c) === "idle" ? (moods[p.mood] || "tranqui") : (overall(c) === "waiting" ? "atento" : "laburando");
+  html += `<div class="foot"><b>${esc(p.name || "Clawdito")}</b> Nv ${p.level || 1} · ${status}<span class="sp"></span>` +
+          `<span class="bar" title="panza"><i style="width:${p.food ?? 0}%;background:var(--amber)"></i></span>` +
+          `<span class="bar" title="ánimo"><i style="width:${p.joy ?? 0}%;background:#E8798F"></i></span>` +
+          `${p.today ? ` · ${p.today} hoy` : ""}</div>`;
+
+  if (el.dataset.k !== html) {
+    el.dataset.k = html;
+    el.innerHTML = html;
+    el.querySelectorAll(".row[data-id]").forEach(r => r.addEventListener("click", () => post({ type: "focus", id: r.dataset.id })));
+  }
+  const w = NW + 2 * LIST_SIDE - 24;
+  el.style.width = w + "px";
+  el.style.left = ((W - w) / 2) + "px";
+  el.style.top = (NH + 4) + "px";
+  listH = NH + 4 + el.scrollHeight + 8;
+}
+
+// Click the pet for some love.
+function petIt() {
+  petUntil = performance.now() + 1500;
+  applyPetMood();
+  setTimeout(applyPetMood, 1550);
+  post({ type: "pet" });
+}
+$("petG").addEventListener("click", petIt);
+
+// ---------------------------------------------------------------- mode + springs
+function decideMode() {
+  if (hover) return "hover";
+  if (toast && performance.now() < toastUntil) return "toast";
+  const c = counts();
+  return (c.waiting || c.working || c.done) ? "compact" : "hidden";
+}
+
+function refresh() {
+  mode = decideMode();
+  renderPips();
+  renderToast();
+  renderList();
+  applyPetMood();
+  kick();
+}
+
+function targets() {
+  switch (mode) {
+    case "hover":   return { l: Math.max(LEFT_WING, LIST_SIDE), r: Math.max(LIST_SIDE, MIN_RIGHT, pipsWidth + 16), h: listH };
+    case "toast":   return { l: LEFT_WING, r: Math.max(MIN_RIGHT, toastWidth + 18), h: NH };
+    case "compact": return { l: LEFT_WING, r: Math.max(MIN_RIGHT, pipsWidth + 18), h: NH };
+    default:        return { l: 0, r: 0, h: NH };
+  }
+}
+
+const spring = (k, z) => ({ x: 0, v: 0, k, c: 2 * Math.sqrt(k) * z });
+const L = spring(220, 0.78), R = spring(220, 0.78), Hs = spring(260, 0.9);
+Hs.x = NH;
+let raf = 0, last = 0, lastRect = "";
+
+function shapePath(l, r, h) {
+  const x0 = (W - NW) / 2 - l, x1 = (W + NW) / 2 + r;
+  const e = clamp(Math.min(l, r) * 0.3, 0, 5);
+  const rad = clamp(NH * 0.36 + (h - NH) * 0.25, NH * 0.36, 16);
+  return `M${x0 - e} 0 Q${x0} 0 ${x0} ${e} L${x0} ${h - rad} Q${x0} ${h} ${x0 + rad} ${h}` +
+         ` L${x1 - rad} ${h} Q${x1} ${h} ${x1} ${h - rad} L${x1} ${e} Q${x1} 0 ${x1 + e} 0 Z`;
+}
+
+function render() {
+  const l = Math.max(0, L.x), r = Math.max(0, R.x), h = Math.max(NH, Hs.x);
+  const leftEdge = (W - NW) / 2, rightEdge = (W + NW) / 2, cy = NH / 2;
+
+  $("shape").setAttribute("d", shapePath(l, r, h));
+  $("shape").style.opacity = clamp(Math.max(l, r) / 8);
+
+  // Pet, centred in the left wing. 1.5pt per art pixel = exactly 3 device pixels on Retina, so it stays crisp.
+  const u = 1.5, s = 13 * u, pw = 15 * u;
+  const snap = v => Math.round(v * 2) / 2;
+  pet.setAttribute("x", snap(leftEdge - LEFT_WING / 2 - pw / 2 + 1));
+  pet.setAttribute("y", snap(cy - s / 2 + 1));
+  pet.setAttribute("width", pw);
+  pet.setAttribute("height", s);
+  const petOp = clamp((l - 14) / 12);
+  $("petG").style.opacity = petOp;
+  $("petG").style.display = petOp > 0.01 ? "" : "none";
+
+  // Right wing: pips, or the inline toast.
+  const rOpen = clamp((r - 14) / 12);
+  const showToast = mode === "toast";
+  $("pips").setAttribute("transform", `translate(${rightEdge + Math.max(MIN_RIGHT, pipsWidth + 18) / 2} ${cy})`);
+  $("pips").style.opacity = showToast ? 0 : rOpen;
+  $("toastG").setAttribute("transform", `translate(${rightEdge + 9} ${cy})`);
+  $("toastG").style.opacity = showToast ? clamp((r - toastWidth) / 10) : 0;
+
+  // Hover list.
+  const list = $("list");
+  const visible = Math.max(0, h - NH - 4 - 4);
+  list.style.height = visible + "px";
+  list.style.opacity = clamp((h - NH - 10) / 20);
+  list.style.display = visible > 1 ? "" : "none";
+
+  // Tell the app where the shape is (hover + click-through hit testing).
+  const ear = clamp(Math.min(l, r) * 0.3, 0, 5);
+  const rect = { x: Math.round(leftEdge - l - ear), y: 0, w: Math.round(NW + l + r + 2 * ear), h: Math.round(h) };
+  const key = `${rect.x},${rect.w},${rect.h}`;
+  if (key !== lastRect) { lastRect = key; post({ type: "rect", ...rect }); }
+}
+
+function frame(now) {
+  const t = now / 1000;
+  const dt = Math.min(1 / 30, last ? t - last : 1 / 60);
+  last = t;
+  const tg = targets();
+  let moving = false;
+  for (const [s, target] of [[L, tg.l], [R, tg.r], [Hs, Math.max(tg.h, NH)]]) {
+    s.v += (s.k * (target - s.x) - s.c * s.v) * dt;
+    s.x += s.v * dt;
+    if (Math.abs(target - s.x) > 0.2 || Math.abs(s.v) > 0.2) moving = true; else { s.x = target; s.v = 0; }
+  }
+  render();
+  if (!moving) { raf = 0; last = 0; return; }     // nothing moving → no frames
+  raf = requestAnimationFrame(frame);
+}
+function kick() { if (!raf) raf = requestAnimationFrame(frame); }
+
+// ---------------------------------------------------------------- native bridge
+window.configure = o => {
+  W = o.width; H = o.height; NW = o.notchWidth; NH = o.notchHeight;
+  refresh();
+};
+
+window.update = m => {
+  model = m;
+  if (toast) {                         // drop the toast once that session moves on
+    const s = model.sessions.find(x => x.id === toast.id);
+    if (!s || s.state !== toast.state) { toast = null; toastUntil = 0; }
+  }
+  refresh();
+};
+
+window.notify = n => {                 // a session just finished or needs you
+  if (model.autoExpand === false || hover) return;
+  toast = n;
+  toastUntil = performance.now() + 4000;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(refresh, 4030);
+  refresh();
+};
+
+window.setHover = v => { hover = !!v; refresh(); };
+
+// ---------------------------------------------------------------- demo (notch.html?demo)
+if (new URLSearchParams(location.search).has("demo")) {
+  if (!window.webkit?.messageHandlers?.native) {
+    document.body.classList.add("preview");
+    W = innerWidth; H = innerHeight; NH = 38; NW = 190;
+    const fn = $("fakeNotch");
+    fn.style.display = "";
+    fn.setAttribute("x", (W - NW) / 2); fn.setAttribute("width", NW);
+    fn.setAttribute("y", -12); fn.setAttribute("height", NH + 12); fn.setAttribute("rx", 11);
+  }
+  const petData = { name: "Clawdito", level: 4, mood: "happy", food: 64, joy: 81, streak: 3, today: 5 };
+  const S = (id, project, state, detail) => ({ id, project, state, detail });
+  const frames = [
+    [S("a", "claude-notch", "working", "Editando main.swift")],
+    [S("a", "claude-notch", "working", "Corriendo build.sh"), S("b", "api-server", "working", "Leyendo routes.ts"), S("c", "landing", "working", "Buscando “hero”")],
+    [S("a", "claude-notch", "working", "Corriendo build.sh"), S("b", "api-server", "waiting", "Permiso: Bash · npm install"), S("c", "landing", "working", "Editando Hero.tsx")],
+    [S("a", "claude-notch", "done", "Quedó instalado y andando."), S("b", "api-server", "working", "Instalando dependencias"), S("c", "landing", "working", "Editando Hero.tsx")],
+    [S("a", "claude-notch", "resting", ""), S("b", "api-server", "done", "Agregué el endpoint /users con tests."), S("c", "landing", "done", "Nuevo hero con animación.")],
+    [S("a", "claude-notch", "resting", ""), S("b", "api-server", "resting", ""), S("c", "landing", "resting", "")],
+  ];
+  let i = 0;
+  const step = () => {
+    const sessions = frames[i % frames.length];
+    const prev = model.sessions;
+    window.update({ sessions, pet: petData, autoExpand: true });
+    for (const s of sessions) {
+      const old = prev.find(p => p.id === s.id);
+      if ((s.state === "done" || s.state === "waiting") && old?.state !== s.state) { window.notify(s); break; }
+    }
+    i++;
+    setTimeout(step, 4500);
+  };
+  step();
+}
+
+refresh();
+</script>
+</body>
+</html>
