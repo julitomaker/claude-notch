@@ -1,6 +1,6 @@
 # Claude Notch
 
-> 🇦🇷 **Instalación rápida:** cloná el repo, entrá a la carpeta y corré `./install.sh`.
+> 🇦🇷 **Instalación rápida:** `git clone https://github.com/julitomaker/claude-notch.git && cd claude-notch && ./install.sh`
 > Necesitás macOS 13+, Claude Code y las Command Line Tools (`xcode-select --install`).
 > Reiniciá las sesiones de Claude Code abiertas. Para desinstalar: `~/.claude/notch/uninstall.sh`.
 
@@ -34,7 +34,7 @@ Requirements: a Mac on macOS 13+ (best with a notch), [Claude Code](https://clau
 and Xcode Command Line Tools (`xcode-select --install`).
 
 ```sh
-git clone <repo-url> claude-notch
+git clone https://github.com/julitomaker/claude-notch.git
 cd claude-notch
 ./install.sh
 ```
